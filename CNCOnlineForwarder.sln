@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.271
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CNCOnlineForwarder", "CNCOnlineForwarder.vcxproj", "{99474E4B-07A6-4FED-B887-37D041A3D221}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CNCOnlineForwarder", "CNCOnlineForwarder\CNCOnlineForwarder.vcxproj", "{99474E4B-07A6-4FED-B887-37D041A3D221}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
