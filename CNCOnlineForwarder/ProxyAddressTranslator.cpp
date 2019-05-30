@@ -99,8 +99,7 @@ namespace CNCOnlineForwarder
         {
             if (code.failed())
             {
-                log(LogLevel::error, "Address Updater: async wait failed");
-                return;
+                throw std::system_error{ code, "ProxyAddressTranslator: Async wait failed" };
             }
             periodicallySetPublicAddress(ref);
         });
