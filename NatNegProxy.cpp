@@ -64,17 +64,19 @@ namespace CNCOnlineForwarder::NatNeg
 
     std::shared_ptr<NatNegProxy> NatNegProxy::create
     (
-        IOManager::ObjectMaker objectMaker,
-        const EndPoint& serverAddress,
-        const AddressV4& proxyPublicAddress
+        const IOManager::ObjectMaker& objectMaker,
+        const std::string_view serverHostName,
+        const std::uint16_t serverPort,
+        const std::weak_ptr<ProxyAddressTranslator>& addressTranslator
     )
     {
         const auto self = std::make_shared<NatNegProxy>
         (
             PrivateConstructor{},
             objectMaker, 
-            serverAddress, 
-            proxyPublicAddress
+            serverHostName,
+            serverPort,
+            addressTranslator
         );
 
         const auto action = [](NatNegProxy& self)
@@ -82,7 +84,7 @@ namespace CNCOnlineForwarder::NatNeg
             logLine(LogLevel::info, "NatNegProxy created.");
             self.prepareForNextPacketToServer();
         };
-        boost::asio::defer(self->proxyStrand, makeWeakHandler(self.get(), action));
+        boost::asio::defer(self->proxyStrand, makeWeakHandler(self, action));
 
         return self;
     }
@@ -90,15 +92,17 @@ namespace CNCOnlineForwarder::NatNeg
     NatNegProxy::NatNegProxy
     (
         PrivateConstructor,
-        IOManager::ObjectMaker objectMaker,
-        const EndPoint& serverAddress,
-        const AddressV4& proxyPublicAddress
+        const IOManager::ObjectMaker& objectMaker,
+        const std::string_view serverHostName,
+        const std::uint16_t serverPort,
+        const std::weak_ptr<ProxyAddressTranslator>& addressTranslator
     ) :
         objectMaker{ objectMaker },
         proxyStrand{ objectMaker.makeStrand() },
-        serverSocket{ proxyStrand, EndPoint{ UDP::v4(), 27901 } },
-        serverAddress{ serverAddress },
-        addressTranslator{ proxyPublicAddress }
+        serverSocket{ proxyStrand, EndPoint{ UDP::v4(), serverPort } },
+        serverHostName{ serverHostName },
+        serverPort{ serverPort },
+        addressTranslator{ addressTranslator }
     {}
 
     void NatNegProxy::sendFromProxySocket(const PacketView packetView, const EndPoint& to)
@@ -137,11 +141,6 @@ namespace CNCOnlineForwarder::NatNeg
         );
     }
 
-    NatNegProxy::EndPoint NatNegProxy::localToPublicEndPoint(const EndPoint& local) const
-    {
-        return this->addressTranslator.localToPublic(local);
-    }
-
     void NatNegProxy::prepareForNextPacketToServer()
     {
         auto handler = ReceiveHandler::create(this);
@@ -176,9 +175,11 @@ namespace CNCOnlineForwarder::NatNeg
                 (
                     this->objectMaker,
                     this->weak_from_this(),
+                    this->addressTranslator,
                     natNegPlayerID,
-                    this->serverAddress,
-                    from
+                    from,
+                    this->serverHostName,
+                    this->serverPort
                 );
             }
         }

@@ -40,8 +40,32 @@ namespace CNCOnlineForwarder::Utility
     };
 
     template<typename T, typename Handler>
-    WeakRefHandler<T, Handler> makeWeakHandler(T* pointer, Handler handler)
+    WeakRefHandler<T, Handler> makeWeakHandler
+    (
+        std::enable_shared_from_this<T>* pointer, 
+        Handler handler
+    )
     {
         return { pointer->weak_from_this(), std::move(handler) };
+    }
+
+    template<typename T, typename Handler>
+    WeakRefHandler<T, Handler> makeWeakHandler
+    (
+        const std::weak_ptr<T>& pointer, 
+        Handler handler
+    )
+    {
+        return { pointer, std::move(handler) };
+    }
+
+    template<typename T, typename Handler>
+    WeakRefHandler<T, Handler> makeWeakHandler
+    (
+        const std::shared_ptr<T>& pointer,
+        Handler handler
+    )
+    {
+        return { pointer, std::move(handler) };
     }
 }

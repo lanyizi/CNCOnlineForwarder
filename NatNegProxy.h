@@ -1,6 +1,9 @@
 #pragma once
+#include <cstddef>
 #include <functional>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <unordered_set>
 #include <unordered_map>
 #include <boost/asio/ip/address_v4.hpp>
@@ -31,24 +34,24 @@ namespace CNCOnlineForwarder::NatNeg
 
         static std::shared_ptr<NatNegProxy> create
         (
-            IOManager::ObjectMaker objectMaker,
-            const EndPoint& serverEndPoint,
-            const AddressV4& proxyPublicAddress
+            const IOManager::ObjectMaker& objectMaker,
+            const std::string_view serverHostName,
+            const std::uint16_t serverPort,
+            const std::weak_ptr<ProxyAddressTranslator>& addressTranslator
         );
 
         NatNegProxy
         (
             PrivateConstructor,
-            IOManager::ObjectMaker objectMaker,
-            const EndPoint& serverEndPoint,
-            const AddressV4& proxyPublicAddress
+            const IOManager::ObjectMaker& objectMaker,
+            const std::string_view serverHostName,
+            const std::uint16_t serverPort,
+            const std::weak_ptr<ProxyAddressTranslator>& addressTranslator
         );
 
         void sendFromProxySocket(const PacketView packetView, const EndPoint& to);
 
         void removeConnection(const NatNegPlayerID id);
-
-        EndPoint localToPublicEndPoint(const EndPoint& local) const;
 
     private:
         void prepareForNextPacketToServer();
@@ -58,8 +61,9 @@ namespace CNCOnlineForwarder::NatNeg
         IOManager::ObjectMaker objectMaker;
         Strand proxyStrand;
         Socket serverSocket;
-        EndPoint serverAddress;
+        std::string serverHostName;
+        std::uint16_t serverPort;
         std::unordered_map<NatNegPlayerID, std::weak_ptr<InitialPhase>, NatNegPlayerID::Hash> initialPhases;
-        ProxyAddressTranslator addressTranslator;
+        std::shared_ptr<ProxyAddressTranslator> addressTranslator;
     };
 }

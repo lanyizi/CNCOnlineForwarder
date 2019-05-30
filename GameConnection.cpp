@@ -2,6 +2,7 @@
 #include "GameConnection.h"
 #include "Logging.h"
 #include "NatNegProxy.h"
+#include "ProxyAddressTranslator.h"
 #include "SimpleWriteHandler.hpp"
 #include "WeakRefHandler.hpp"
 
@@ -77,8 +78,9 @@ namespace CNCOnlineForwarder::NatNeg
 
     std::shared_ptr<GameConnection> GameConnection::create
     (
-        IOManager::ObjectMaker objectMaker,
+        const IOManager::ObjectMaker& objectMaker,
         const std::weak_ptr<NatNegProxy>& proxy,
+        const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
         const EndPoint& server,
         const EndPoint& client
     )
@@ -88,6 +90,7 @@ namespace CNCOnlineForwarder::NatNeg
             PrivateConstructor{},
             objectMaker, 
             proxy, 
+            addressTranslator,
             server, 
             client
         );
@@ -97,7 +100,7 @@ namespace CNCOnlineForwarder::NatNeg
             logLine(LogLevel::info, "New Connection ", &self, " created, client address ", self.clientPublicAddress);
             self.prepareForNextPacketToPlayer();
         };
-        boost::asio::defer(self->strand, makeWeakHandler(self.get(), action));
+        boost::asio::defer(self->strand, makeWeakHandler(self, action));
 
         return self;
     }
@@ -105,13 +108,15 @@ namespace CNCOnlineForwarder::NatNeg
     GameConnection::GameConnection
     (
         PrivateConstructor,
-        IOManager::ObjectMaker objectMaker,
+        const IOManager::ObjectMaker& objectMaker,
         const std::weak_ptr<NatNegProxy>& proxy,
+        const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
         const EndPoint& server,
         const EndPoint& clientPublicAddress
     ) :
         strand{ objectMaker.makeStrand() },
         proxy{ proxy },
+        addressTranslator{ addressTranslator },
         server{ server },
         clientPublicAddress{ clientPublicAddress },
         clientRealAddress{ clientPublicAddress },
@@ -255,7 +260,7 @@ namespace CNCOnlineForwarder::NatNeg
         const auto proxy = this->proxy.lock();
         if (!proxy)
         {
-            logLine(LogLevel::warning, "Proxy already died when handling CommPacket from server");
+            logLine(LogLevel::error, "Proxy already died when handling CommPacket from server");
             return;
         }
 
@@ -266,7 +271,14 @@ namespace CNCOnlineForwarder::NatNeg
             logLine(LogLevel::info, "CommPacket contains address, will try to rewrite it");
 
             const auto fakeRemotePlayerAddress = fakeRemotePlayerSocket->local_endpoint();
-            const auto publicRemoteFakeAddress = proxy->localToPublicEndPoint(fakeRemotePlayerAddress);
+            const auto addressTranslator = this->addressTranslator.lock();
+            if (!addressTranslator)
+            {
+                logLine(LogLevel::error, "AddressTranslator already died when rewriting CommPacket");
+                return;
+            }
+            const auto publicRemoteFakeAddress = 
+                addressTranslator->localToPublic(fakeRemotePlayerAddress);
             const auto ip = publicRemoteFakeAddress.address().to_v4().to_bytes();
             const auto port = boost::endian::native_to_big(publicRemoteFakeAddress.port());
             rewriteAddress(buffer, addressOffset.value(), ip, port);

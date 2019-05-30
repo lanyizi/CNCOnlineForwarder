@@ -27,9 +27,20 @@ namespace CNCOnlineForwarder
 
         IOManager(PrivateConstructor) {}
 
-        auto run() { return this->context.run(); }
-
         auto stop() { return this->context.stop(); }
+
+        auto run() 
+        { 
+            try
+            {
+                return this->context.run();
+            }
+            catch (...)
+            {
+                this->stop();
+                throw;
+            }
+        }
 
     private:
         ContextType context;
@@ -42,13 +53,13 @@ namespace CNCOnlineForwarder
             ioManager{ std::move(ioManager) } {}
 
         template<typename T, typename... Arguments>
-        T make(Arguments&&... arguments)
+        T make(Arguments&&... arguments) const
         {
             const auto ioManager = std::shared_ptr{ this->ioManager };
             return T{ ioManager->context, std::forward<Arguments>(arguments)... };
         }
 
-        StrandType makeStrand()
+        StrandType makeStrand() const
         {
             const auto ioManager = std::shared_ptr{ this->ioManager };
             return boost::asio::make_strand(ioManager->context);
@@ -92,7 +103,7 @@ namespace CNCOnlineForwarder
         public Details::WithStrandBase<boost::asio::ip::udp::socket>
     {
     public:
-        using WithStrandBase::WithStrandBase;
+        using Details::WithStrandBase<boost::asio::ip::udp::socket>::WithStrandBase;
 
         template<typename MutableBufferSequence, typename EndPoint, typename ReadHandler>
         auto asyncReceiveFrom
@@ -132,13 +143,37 @@ namespace CNCOnlineForwarder
         public Details::WithStrandBase<boost::asio::steady_timer>
     {
     public:
-        using WithStrandBase::WithStrandBase;
+        using Details::WithStrandBase<boost::asio::steady_timer>::WithStrandBase;
 
         template<typename WaitHandler>
         auto asyncWait(const std::chrono::minutes timeout, WaitHandler&& waitHandler)
         {
             this->object.expires_from_now(timeout);
             this->object.async_wait(std::forward<WaitHandler>(waitHandler));
+        }
+    };
+
+    template<typename Protocol>
+    class WithStrand<boost::asio::ip::basic_resolver<Protocol>> :
+        public Details::WithStrandBase<boost::asio::ip::basic_resolver<Protocol>>
+    {
+    public:
+        using Details::WithStrandBase<boost::asio::ip::basic_resolver<Protocol>>::WithStrandBase;
+
+        template<typename ResolveHandler>
+        auto asyncResolve
+        (
+            const std::string_view host, 
+            const std::string_view service, 
+            ResolveHandler&& resolveHandler
+        )
+        {
+            this->object.async_resolve
+            (
+                host,
+                service,
+                std::forward<ResolveHandler>(resolveHandler)
+            );
         }
     };
 }

@@ -8,6 +8,7 @@
 
 using AddressV4 = boost::asio::ip::address_v4;
 using UDP = boost::asio::ip::udp;
+using Resolved = boost::asio::ip::udp::resolver::results_type;
 using ErrorCode = boost::system::error_code;
 using LogLevel = CNCOnlineForwarder::Logging::Level;
 using WriteHandler = CNCOnlineForwarder::Utility::SimpleWriteHandler<CNCOnlineForwarder::NatNeg::InitialPhase>;
@@ -63,95 +64,96 @@ namespace CNCOnlineForwarder::NatNeg
 
     std::shared_ptr<InitialPhase> InitialPhase::create
     (
-        IOManager::ObjectMaker objectMaker,
+        const IOManager::ObjectMaker& objectMaker,
         const std::weak_ptr<NatNegProxy>& proxy,
+        const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
         const NatNegPlayerID id,
-        const EndPoint& server,
-        const EndPoint& clientPublicAddress
+        const EndPoint& client,
+        const std::string& serverHostName,
+        const std::uint16_t serverPort
     )
     {
-        auto connection = GameConnection::create
-        (
-            objectMaker, 
-            proxy, 
-            server, 
-            clientPublicAddress
-        );
-
         const auto self = std::make_shared<InitialPhase>
         (
             PrivateConstructor{}, 
             objectMaker, 
             proxy, 
-            id, 
-            server, 
-            std::move(connection)
+            id
         );
 
-        const auto action = [](InitialPhase& self)
+        const auto onHostNameResolved = [objectMaker, addressTranslator, client]
+        (
+            InitialPhase& self,
+            const ErrorCode& code,
+            const Resolved resolved
+        )
         {
-            logLine(LogLevel::info, "InitialPhase created, id = ", self.id);
+            if (code.failed())
+            {
+                logLine(LogLevel::error, "Failed to resolve server hostname: ", code);
+                return;
+            }
+
+            self.server = *resolved;
+            self.connection = GameConnection::create
+            (
+                objectMaker,
+                self.proxy,
+                addressTranslator,
+                self.server,
+                client
+            );
             self.prepareForNextPacketToCommunicationAddress();
+
+            auto pendingActions = std::move(self.pendingActions.value());
+            self.pendingActions.reset();
+            for (auto&[data, destination] : pendingActions)
+            {
+                self.handlePacketToServerInternal(PacketView{ {data} }, destination);
+            }
         };
-        boost::asio::defer(self->strand, makeWeakHandler(self.get(), action));
-                                         
+        const auto action = [serverHostName, serverPort, onHostNameResolved](InitialPhase& self)
+        {
+            logLine(LogLevel::info, "InitialPhase creating, id = ", self.id);
+            self.extendLife();
+
+            self.resolver.asyncResolve
+            (
+                serverHostName,
+                std::to_string(serverPort),
+                makeWeakHandler(&self, onHostNameResolved)
+            );
+        };
+        boost::asio::defer(self->strand, makeWeakHandler(self, action));
+
         return self;
     }
 
     InitialPhase::InitialPhase
     (
         PrivateConstructor,
-        IOManager::ObjectMaker objectMaker,
+        const IOManager::ObjectMaker& objectMaker,
         const std::weak_ptr<NatNegProxy>& proxy,
-        const NatNegPlayerID id,
-        const EndPoint& server,
-        std::weak_ptr<GameConnection>&& connection
+        const NatNegPlayerID id
     ) :
         strand{ objectMaker.makeStrand() },
-        proxy{ proxy },
-        id{ id },
+        resolver{ strand },
         communicationSocket{ strand, UDP::v4() },
-        serverAddress{ server },
-        clientCommunicationAddress{},
         timeout{ strand },
-        connection{ std::move(connection) }
+        proxy{ proxy },
+        connection{},
+        id{ id },
+        server{},
+        clientCommunication{},
+        pendingActions{}
     {}
 
     void InitialPhase::handlePacketToServer(const PacketView packet, const EndPoint& from)
     {
         auto action = [data = packet.copyBuffer(), from](InitialPhase& self)
         {
-            const auto connection = self.connection.lock();
-            if (!connection)
-            {
-                logLine(LogLevel::warning, "Packet to server handler: aborting because connection expired");
-                self.close();
-                return;
-            }
-
-            if (from == connection->getClientPublicAddress())
-            {
-                return connection->handlePacketToServer(std::string_view{ data });
-            }
-
             const auto packet = PacketView{ {data} };
-            if (!packet.isNatNeg())
-            {
-                logLine(LogLevel::warning, "Packet from server is not NatNeg, discarded.");
-                return;
-            }
-
-            self.clientCommunicationAddress = from;
-
-            auto writeHandler = WriteHandler{ data };
-            self.communicationSocket.asyncSendTo
-            (
-                writeHandler.getData(),
-                self.serverAddress,
-                std::move(writeHandler)
-            );
-
-            self.extendLife();
+            self.handlePacketToServerInternal(packet, from);
         };
 
         boost::asio::defer(this->strand, makeWeakHandler(this, std::move(action)));
@@ -227,7 +229,42 @@ namespace CNCOnlineForwarder::NatNeg
         connection->handleCommunicationPacketFromServer
         (
             packet, 
-            this->clientCommunicationAddress
+            this->clientCommunication
+        );
+
+        this->extendLife();
+    }
+
+    void InitialPhase::handlePacketToServerInternal(const PacketView packet, const EndPoint& from)
+    {
+        const auto connection = this->connection.lock();
+        if (!connection)
+        {
+            logLine(LogLevel::warning, "Packet to server handler: aborting because connection expired");
+            this->close();
+            return;
+        }
+
+        if (from == connection->getClientPublicAddress())
+        {
+            return connection->handlePacketToServer(packet);
+        }
+
+        if (!packet.isNatNeg())
+        {
+            logLine(LogLevel::warning, "Packet from server is not NatNeg, discarded.");
+            return;
+        }
+
+        logLine(LogLevel::info, "Updating clientCommunication endpoint to ", from);
+        this->clientCommunication = from;
+
+        auto writeHandler = WriteHandler{ packet.copyBuffer() };
+        this->communicationSocket.asyncSendTo
+        (
+            writeHandler.getData(),
+            this->server,
+            std::move(writeHandler)
         );
 
         this->extendLife();

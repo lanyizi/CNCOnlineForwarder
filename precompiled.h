@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -32,5 +33,9 @@
 #include <boost/endian/conversion.hpp>
 
 #include <boost/container_hash/hash.hpp>
+
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
 
 #endif

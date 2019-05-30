@@ -7,6 +7,7 @@
 #include <boost/asio/strand.hpp>
 #include "IOManager.hpp"
 #include "NatNegPacket.hpp"
+#include "ProxyAddressTranslator.h"
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -32,8 +33,9 @@ namespace CNCOnlineForwarder::NatNeg
 
         static std::shared_ptr<GameConnection> create
         (
-            IOManager::ObjectMaker objectMaker,
+            const IOManager::ObjectMaker& objectMaker,
             const std::weak_ptr<NatNegProxy>& proxy,
+            const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
             const EndPoint& server,
             const EndPoint& clientPublicAddress
         );
@@ -41,8 +43,9 @@ namespace CNCOnlineForwarder::NatNeg
         GameConnection
         (
             PrivateConstructor,
-            IOManager::ObjectMaker objectMaker,
+            const IOManager::ObjectMaker& objectMaker,
             const std::weak_ptr<NatNegProxy>& proxy,
+            const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
             const EndPoint& server,
             const EndPoint& clientPublicAddress
         );
@@ -78,6 +81,7 @@ namespace CNCOnlineForwarder::NatNeg
 
         Strand strand;
         std::weak_ptr<NatNegProxy> proxy;
+        std::weak_ptr<ProxyAddressTranslator> addressTranslator;
         EndPoint server;
         EndPoint clientPublicAddress;
         EndPoint clientRealAddress;
