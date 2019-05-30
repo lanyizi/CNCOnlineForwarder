@@ -134,7 +134,7 @@ namespace CNCOnlineForwarder::Utility
             // Set a timeout on the operation
             this->stream.expires_after(std::chrono::seconds(30));
 
-            log(LogLevel::info, "Connected. EndPoint", endPoint, "; Writing header.");
+            log(LogLevel::info, "Connected to ", endPoint, "; Writing header.");
 
             // Send the HTTP request to the remote host
             boost::beast::http::async_write
@@ -183,7 +183,7 @@ namespace CNCOnlineForwarder::Utility
 
             // Write the message to standard out
             auto stringStream = std::stringstream{};
-            stringStream << response;
+            stringStream << this->response.body();
             
             log(LogLevel::info, "Response read.");
             this->onGet(stringStream.str());
