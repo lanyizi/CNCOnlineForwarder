@@ -78,8 +78,10 @@ namespace CNCOnlineForwarder
 
         log(LogLevel::info, "Will update public address now.");
 
-        const auto action = [](ProxyAddressTranslator& self, const std::string& newIP)
+        const auto action = [](ProxyAddressTranslator& self, std::string newIP)
         {
+            boost::algorithm::trim(newIP);
+            log(LogLevel::info, "Retrieved public IP address: ", newIP);
             self.setPublicAddress(AddressV4::from_string(newIP));
         };
         Utility::asyncHttpGet
@@ -97,7 +99,7 @@ namespace CNCOnlineForwarder
         {
             if (code.failed())
             {
-                log(LogLevel::error, "Update Address' timer async wait failed");
+                log(LogLevel::error, "Address Updater: async wait failed");
                 return;
             }
             periodicallySetPublicAddress(ref);
