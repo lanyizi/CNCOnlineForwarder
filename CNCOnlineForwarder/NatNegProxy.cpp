@@ -160,9 +160,16 @@ namespace CNCOnlineForwarder::NatNeg
             return;
         }
 
-        const auto natNegPlayerID = packet.getNatNegPlayerID().value();
+        const auto step = packet.getStep();
+        const auto natNegPlayerIDHolder = packet.getNatNegPlayerID();
+        if (!natNegPlayerIDHolder.has_value())
+        {
+            logLine(LogLevel::info, "Packet of step ", static_cast<int>(step), " does not have NatNegPlayerID, discarded.");
+            return;
+        }
+        const auto natNegPlayerID = natNegPlayerIDHolder.value();
 
-        switch (const auto step = packet.getStep())
+        switch (step)
         {
         case NatNegStep::init:
         {
