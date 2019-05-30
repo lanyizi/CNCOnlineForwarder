@@ -66,11 +66,9 @@ namespace CNCOnlineForwarder::NatNeg
     (
         const IOManager::ObjectMaker& objectMaker,
         const std::weak_ptr<NatNegProxy>& proxy,
-        const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
         const NatNegPlayerID id,
-        const EndPoint& client,
-        const std::string& serverHostName,
-        const std::uint16_t serverPort
+        const std::string& natNegServer,
+        const std::uint16_t natNegPort
     )
     {
         const auto self = std::make_shared<InitialPhase>
@@ -81,7 +79,7 @@ namespace CNCOnlineForwarder::NatNeg
             id
         );
 
-        const auto onHostNameResolved = [objectMaker, addressTranslator, client]
+        const auto onResolved = []
         (
             InitialPhase& self,
             const ErrorCode& code,
@@ -95,36 +93,25 @@ namespace CNCOnlineForwarder::NatNeg
             }
 
             self.server = *resolved;
-            self.connection = GameConnection::create
-            (
-                objectMaker,
-                self.proxy,
-                addressTranslator,
-                self.server,
-                client
-            );
-            self.prepareForNextPacketToCommunicationAddress();
+            logLine(LogLevel::info, "server hostname resolved: ", self.server.value());
 
-            auto pendingActions = std::move(self.pendingActions.value());
-            self.pendingActions.reset();
-            for (auto&[data, destination] : pendingActions)
-            {
-                self.handlePacketToServerInternal(PacketView{ {data} }, destination);
-            }
+            self.checkPendingActions();
         };
-        const auto action = [serverHostName, serverPort, onHostNameResolved](InitialPhase& self)
+
+        const auto action = [self, natNegServer, natNegPort, onResolved]
         {
-            logLine(LogLevel::info, "InitialPhase creating, id = ", self.id);
-            self.extendLife();
+            logLine(LogLevel::info, "InitialPhase creating, id = ", self->id);
+            self->extendLife();
 
-            self.resolver.asyncResolve
+            logLine(LogLevel::info, "Resolving server hostname: ", natNegServer);
+            self->resolver.asyncResolve
             (
-                serverHostName,
-                std::to_string(serverPort),
-                makeWeakHandler(&self, onHostNameResolved)
+                natNegServer,
+                std::to_string(natNegPort),
+                makeWeakHandler(self, onResolved)
             );
         };
-        boost::asio::defer(self->strand, makeWeakHandler(self, action));
+        boost::asio::defer(self->strand, action);
 
         return self;
     }
@@ -138,25 +125,101 @@ namespace CNCOnlineForwarder::NatNeg
     ) :
         strand{ objectMaker.makeStrand() },
         resolver{ strand },
-        communicationSocket{ strand, UDP::v4() },
+        communicationSocket{ strand, EndPoint{ UDP::v4(), 0 } },
         timeout{ strand },
         proxy{ proxy },
         connection{},
         id{ id },
         server{},
         clientCommunication{},
-        pendingActions{}
+        pendingDataToServer{ std::in_place },
+        pendingConnectionMaker{}
     {}
 
-    void InitialPhase::handlePacketToServer(const PacketView packet, const EndPoint& from)
+    void InitialPhase::prepareGameConnection
+    (
+        const IOManager::ObjectMaker& objectMaker,
+        const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
+        const EndPoint& client
+    )
     {
-        auto action = [data = packet.copyBuffer(), from](InitialPhase& self)
+        this->pendingConnectionMaker = [this, objectMaker, addressTranslator, client]
         {
+            this->connection = GameConnection::create
+            (
+                objectMaker,
+                this->proxy,
+                addressTranslator,
+                this->server.value(),
+                client
+            );
+        };
+
+        this->checkPendingActions();
+    }
+
+    void InitialPhase::handlePacketToServer
+    (
+        const PacketView packet, 
+        const EndPoint& from
+    )
+    {
+        auto action = [data = packet.copyBuffer(), from](InitialPhase& self) mutable
+        {
+            if (self.pendingDataToServer.has_value())
+            {
+                logLine(LogLevel::info, "deferring handlePacketToServer because self not ready yet.");
+                self.pendingDataToServer->emplace_back
+                (
+                    std::pair{ std::move(data), from }
+                );
+                return;
+            }
+
             const auto packet = PacketView{ {data} };
             self.handlePacketToServerInternal(packet, from);
         };
 
         boost::asio::defer(this->strand, makeWeakHandler(this, std::move(action)));
+    }
+
+    void InitialPhase::checkPendingActions()
+    {
+        if (!this->pendingDataToServer.has_value())
+        {
+            logLine(LogLevel::error, "Invalid CheckPendingActions call");
+            return;
+        }
+
+        if (!this->server.has_value())
+        {
+            return;
+        }
+
+        if (!this->pendingConnectionMaker)
+        {
+            return;
+        }
+        
+        const auto gameConnectionMaker = std::move(this->pendingConnectionMaker);
+        this->pendingConnectionMaker = nullptr;
+
+        const auto pendingActions = std::move(*this->pendingDataToServer);
+        this->pendingDataToServer.reset();
+
+
+        gameConnectionMaker();
+
+        for (const auto& [data, from] : pendingActions)
+        {
+            this->handlePacketToServerInternal
+            (
+                PacketView{ {data} },
+                from
+            );
+        }
+
+        this->prepareForNextPacketToCommunicationAddress();
     }
 
     void InitialPhase::close()
@@ -263,7 +326,7 @@ namespace CNCOnlineForwarder::NatNeg
         this->communicationSocket.asyncSendTo
         (
             writeHandler.getData(),
-            this->server,
+            this->server.value(),
             std::move(writeHandler)
         );
 

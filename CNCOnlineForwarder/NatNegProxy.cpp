@@ -130,7 +130,7 @@ namespace CNCOnlineForwarder::NatNeg
     {
         auto action = [id](NatNegProxy& self)
         {
-            logLine(LogLevel::error, "Removing connection ", id);
+            logLine(LogLevel::error, "Removing InitaialPhase ", id);
             self.initialPhases.erase(id);
         };
 
@@ -169,46 +169,50 @@ namespace CNCOnlineForwarder::NatNeg
         }
         const auto natNegPlayerID = natNegPlayerIDHolder.value();
 
-        switch (step)
+        auto& initialPhaseRef = this->initialPhases[natNegPlayerID];
+        if (initialPhaseRef.expired())
         {
-        case NatNegStep::init:
-        {
-            logLine(LogLevel::info, "Processing init packet (step ", static_cast<int>(step) , ") ..." );
+            logLine(LogLevel::info, "New NatNegPlayerID, creating InitialPhase: ", natNegPlayerID);
+            initialPhaseRef = InitialPhase::create
+            (
+                this->objectMaker,
+                this->weak_from_this(),
+                natNegPlayerID,
+                this->serverHostName,
+                this->serverPort
+            );
+        }
 
+        const auto initialPhase = initialPhaseRef.lock();
+        if (!initialPhase)
+        {
+            logLine(LogLevel::error, "InitialPhase already expired: ", natNegPlayerID);
+            this->removeConnection(natNegPlayerID);
+            return;
+        }
+
+        logLine(LogLevel::info, "Processing packet (step ", static_cast<int>(step), ") ...");
+        if (step == NatNegStep::init)
+        {
             constexpr auto sequenceNumberOffset = 12;
-            if (packet.natNegPacket.at(sequenceNumberOffset) == 0)
+            const auto sequenceNumber = 
+                static_cast<int>(packet.natNegPacket.at(sequenceNumberOffset));
+
+            logLine(LogLevel::info, "Init packet, seq num = ", sequenceNumber);
+
+            if (sequenceNumber == 0)
             {
-                this->initialPhases[natNegPlayerID] = InitialPhase::create
+                // Packet is from client public address
+                logLine(LogLevel::info, "Preparing GameConnection, client = ", from);
+                initialPhase->prepareGameConnection
                 (
-                    this->objectMaker,
-                    this->weak_from_this(),
-                    this->addressTranslator,
-                    natNegPlayerID,
-                    from,
-                    this->serverHostName,
-                    this->serverPort
+                    this->objectMaker, 
+                    this->addressTranslator, 
+                    from
                 );
             }
         }
-        default:
-        {
-            const auto found = this->initialPhases.find(natNegPlayerID);
-            if (found == this->initialPhases.end())
-            {
-                logLine(LogLevel::error, "Cannot find InitialPhase: ", natNegPlayerID);
-                return;
-            }
-            const auto initialPhase = found->second.lock();
-            if (!initialPhase)
-            {
-                logLine(LogLevel::error, "InitialPhase already expired: ", natNegPlayerID);
-                this->removeConnection(natNegPlayerID);
-                return;
-            }
-            logLine(LogLevel::info, "Processing packet (step ", static_cast<int>(step), ") ...");
-            initialPhase->handlePacketToServer(packet, from);
-        }
-        break;
-        }
+
+        initialPhase->handlePacketToServer(packet, from);
     }
 }

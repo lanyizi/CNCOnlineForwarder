@@ -95,12 +95,13 @@ namespace CNCOnlineForwarder::NatNeg
             client
         );
 
-        const auto action = [](GameConnection& self)
+        const auto action = [self]
         {
-            logLine(LogLevel::info, "New Connection ", &self, " created, client address ", self.clientPublicAddress);
-            self.prepareForNextPacketToPlayer();
+            logLine(LogLevel::info, "New Connection ", self, " created, client = ", self->clientPublicAddress);
+            self->extendLife();
+            self->prepareForNextPacketToPlayer();
         };
-        boost::asio::defer(self->strand, makeWeakHandler(self, action));
+        boost::asio::defer(self->strand, action);
 
         return self;
     }

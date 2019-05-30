@@ -36,11 +36,9 @@ namespace CNCOnlineForwarder::NatNeg
         (
             const IOManager::ObjectMaker& objectMaker,
             const std::weak_ptr<NatNegProxy>& proxy,
-            const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
             const NatNegPlayerID id,
-            const EndPoint& client,
-            const std::string& serverHostName,
-            const std::uint16_t serverPort
+            const std::string& natNegServer,
+            const std::uint16_t natNegPort
         );
 
         InitialPhase
@@ -51,9 +49,17 @@ namespace CNCOnlineForwarder::NatNeg
             const NatNegPlayerID id
         );
 
+        void prepareGameConnection
+        (
+            const IOManager::ObjectMaker& objectMaker,
+            const std::weak_ptr<ProxyAddressTranslator>& addressTranslator,
+            const EndPoint& client
+        );
+
         void handlePacketToServer(const PacketView packet, const EndPoint& from);
 
     private:
+        void checkPendingActions();
 
         void close();
 
@@ -74,9 +80,10 @@ namespace CNCOnlineForwarder::NatNeg
         std::weak_ptr<GameConnection> connection;
 
         NatNegPlayerID id;
-        EndPoint server;
+        std::optional<EndPoint> server;
         EndPoint clientCommunication;
 
-        std::optional<std::vector<std::pair<std::string, EndPoint>>> pendingActions;
+        std::optional<std::vector<std::pair<std::string, EndPoint>>> pendingDataToServer;
+        std::function<void()> pendingConnectionMaker;
     };
 }
