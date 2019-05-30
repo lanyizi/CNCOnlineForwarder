@@ -147,9 +147,11 @@ namespace CNCOnlineForwarder::NatNeg
             case NatNegStep::report:
             case NatNegStep::reportAck:
                 playerIDPosition = 13;
+                break;
             case NatNegStep::preInit:
             case NatNegStep::preInitAck:
                 playerIDPosition = 12;
+                break;
             default:
                 return std::nullopt;
             }
