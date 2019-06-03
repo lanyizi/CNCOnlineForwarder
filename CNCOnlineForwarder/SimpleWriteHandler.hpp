@@ -23,7 +23,11 @@ namespace CNCOnlineForwarder::Utility
             return boost::asio::buffer(*this->data);
         }
 
-        void operator()(const boost::system::error_code& code, const std::size_t bytesSent) const
+        void operator()
+        (
+            const boost::system::error_code& code, 
+            const std::size_t bytesSent
+        ) const
         {
             using namespace Logging;
 
@@ -35,7 +39,7 @@ namespace CNCOnlineForwarder::Utility
 
             if (bytesSent != this->data->size())
             {
-                log(Level::error) << "Proxy: only part of packet was sent: " << bytesSent << "/" << this->data->size() << std::endl;
+                logLine<Type>(Level::error, "Proxy: only part of packet was sent: ", bytesSent, "/", this->data->size());
                 return;
             }
         }
@@ -43,4 +47,10 @@ namespace CNCOnlineForwarder::Utility
     private:
         std::unique_ptr<std::string> data;
     };
+
+    template<typename Type, typename String>
+    auto makeWriteHandler(String&& data)
+    {
+        return SimpleWriteHandler<Type>{std::forward<String>(data)};
+    }
 }

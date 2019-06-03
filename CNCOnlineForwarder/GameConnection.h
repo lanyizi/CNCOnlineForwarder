@@ -8,6 +8,7 @@
 #include "IOManager.hpp"
 #include "NatNegPacket.hpp"
 #include "ProxyAddressTranslator.h"
+//#include "SocketAutoBinder.hpp"
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -61,6 +62,8 @@ namespace CNCOnlineForwarder::NatNeg
         );
 
     private:
+        /*using FutureSocketReady = Utility::PendingReadyState;*/
+
         void extendLife();
 
         void prepareForNextPacketFromPlayer();
@@ -89,6 +92,8 @@ namespace CNCOnlineForwarder::NatNeg
         Socket publicSocketForClient;
         Socket fakeRemotePlayerSocket;
         Timer timeout;
+        /*FutureSocketReady whenPublicSocketForClientIsReadyToReceive;
+        FutureSocketReady whenFakeRemoteIsReadyToReceive;*/
     };
 }
 

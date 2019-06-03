@@ -9,8 +9,10 @@
 using UDP = boost::asio::ip::udp;
 using ErrorCode = boost::system::error_code;
 using LogLevel = CNCOnlineForwarder::Logging::Level;
-using WriteHandler = CNCOnlineForwarder::Utility::SimpleWriteHandler<CNCOnlineForwarder::NatNeg::GameConnection>;
+
 using CNCOnlineForwarder::Utility::makeWeakHandler;
+using CNCOnlineForwarder::Utility::makeWriteHandler;
+//using CNCOnlineForwarder::Utility::SocketAutoBinder::makeWeakWriteHandler;
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -68,6 +70,7 @@ namespace CNCOnlineForwarder::NatNeg
 
         ReceiveHandler(FinalHandlerType handler) :
             data{ std::make_unique<std::string>(1024, '\0') },
+            from{ std::make_unique<EndPoint>() },
             handler{ std::move(handler) }
         {}
 
@@ -100,6 +103,21 @@ namespace CNCOnlineForwarder::NatNeg
             logLine(LogLevel::info, "New Connection ", self, " created, client = ", self->clientPublicAddress);
             self->extendLife();
             self->prepareForNextPacketToPlayer();
+
+            /*auto writeHandler = makeWeakWriteHandler
+            (
+                "DummyPacketForAutoBind", 
+                self.get(), 
+                [](GameConnection& self) 
+                {
+                    return self.whenFakeRemoteIsReadyToReceive;
+                }
+            );
+            
+            self->fakeRemotePlayerSocket.asyncSendTo
+            (
+                writeHandler.getData(),
+            )*/
         };
         boost::asio::defer(self->strand, action);
 
@@ -124,7 +142,9 @@ namespace CNCOnlineForwarder::NatNeg
         remotePlayer{},
         publicSocketForClient{ strand, EndPoint{ UDP::v4(), 0 } },
         fakeRemotePlayerSocket{ strand, EndPoint{ UDP::v4(), 0 } },
-        timeout{ strand }
+        timeout{ strand }/*,
+        whenPublicSocketForClientIsReadyToReceive{ {} },
+        whenFakeRemoteIsReadyToReceive{ {} }*/
     {}
 
     const GameConnection::EndPoint& GameConnection::getClientPublicAddress() const noexcept
@@ -145,7 +165,16 @@ namespace CNCOnlineForwarder::NatNeg
                 return;
             }
 
-            auto writeHandler = WriteHandler{ packet.natNegPacket };
+            /*auto writeHandler = makeWeakWriteHandler
+            (
+                packet.copyBuffer(),
+                &self,
+                [](const GameConnection& self) 
+                {
+                    return self.whenFakeRemoteIsReadyToReceive;
+                }
+            );*/
+            auto writeHandler = makeWriteHandler<GameConnection>(packet.copyBuffer());
             self.publicSocketForClient.asyncSendTo
             (
                 writeHandler.getData(),
@@ -179,7 +208,8 @@ namespace CNCOnlineForwarder::NatNeg
 
     void GameConnection::extendLife()
     {
-        auto waitHandler = [self = this->shared_from_this()](const ErrorCode& code){
+        auto waitHandler = [self = this->shared_from_this()](const ErrorCode& code)
+        {
             if (code == boost::asio::error::operation_aborted)
             {
                 return;
@@ -198,22 +228,39 @@ namespace CNCOnlineForwarder::NatNeg
 
     void GameConnection::prepareForNextPacketFromPlayer()
     {
-        const auto forwarder = [](GameConnection& self, std::string&& data, const EndPoint& from)
+        /*const auto action = [this]
+        {*/
+        const auto forwarder = []
+        (
+            GameConnection& self, 
+            std::string&& data, 
+            const EndPoint& from
+        )
         {
             return self.handlePacketToRemotePlayer(std::move(data), from);
         };
         auto handler = ReceiveHandler<>::create(this, forwarder);
         this->fakeRemotePlayerSocket.asyncReceiveFrom
         (
-            handler->getBuffer(), 
-            handler->getFrom(), 
+            handler->getBuffer(),
+            handler->getFrom(),
             std::move(handler)
         );
+        /*};
+
+        this->whenFakeRemoteIsReadyToReceive.asyncDo(action);*/
     }
 
     void GameConnection::prepareForNextPacketToPlayer()
     {
-        const auto forwarder = [](GameConnection& self, std::string&& data, const EndPoint& from)
+        /*const auto action = [this]
+        {*/
+        const auto forwarder = []
+        (
+            GameConnection& self, 
+            std::string&& data, 
+            const EndPoint& from
+        )
         {
             if (from == self.server)
             {
@@ -223,12 +270,15 @@ namespace CNCOnlineForwarder::NatNeg
             return self.handlePacketFromRemotePlayer(std::move(data), from);
         };
         auto handler = ReceiveHandler<>::create(this, forwarder);
-        this->fakeRemotePlayerSocket.asyncReceiveFrom
+        this->publicSocketForClient.asyncReceiveFrom
         (
             handler->getBuffer(),
             handler->getFrom(),
             std::move(handler)
         );
+        /*};
+
+        this->whenPublicSocketForClientIsReadyToReceive.asyncDo(action);*/
     }
 
     void GameConnection::handlePacketFromServer(const PacketView packet)
@@ -301,7 +351,7 @@ namespace CNCOnlineForwarder::NatNeg
             logLine(LogLevel::warning, "Updating remote address from ", this->remotePlayer, " to ", from);
         }
 
-        auto writeHandler = WriteHandler{ std::move(packet) };
+        auto writeHandler = makeWriteHandler<GameConnection>(std::move(packet));
         this->fakeRemotePlayerSocket.asyncSendTo
         (
             writeHandler.getData(),
@@ -317,7 +367,7 @@ namespace CNCOnlineForwarder::NatNeg
 
     void GameConnection::handlePacketToRemotePlayer(std::string&& packet, const EndPoint& from)
     {
-        auto writeHandler = WriteHandler{ std::move(packet) };
+        auto writeHandler = makeWriteHandler<GameConnection>(std::move(packet));
         this->publicSocketForClient.asyncSendTo
         (
             writeHandler.getData(),

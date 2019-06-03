@@ -10,6 +10,8 @@
 #include "IOManager.hpp"
 #include "NatNegPacket.hpp"
 #include "ProxyAddressTranslator.h"
+#include "PendingActions.hpp"
+//#include "PromisedReady.hpp"
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -20,6 +22,7 @@ namespace CNCOnlineForwarder::NatNeg
     {
     private:
         class ReceiveHandler;
+        struct PromisedEndPoints;
         struct PrivateConstructor {};
     public:
         using Strand = IOManager::StrandType;
@@ -49,6 +52,9 @@ namespace CNCOnlineForwarder::NatNeg
             const NatNegPlayerID id
         );
 
+        InitialPhase(const InitialPhase&) = delete;
+        InitialPhase& operator=(const InitialPhase&) = delete;
+
         void prepareGameConnection
         (
             const IOManager::ObjectMaker& objectMaker,
@@ -59,7 +65,41 @@ namespace CNCOnlineForwarder::NatNeg
         void handlePacketToServer(const PacketView packet, const EndPoint& from);
 
     private:
-        void checkPendingActions();
+        struct PromisedEndPoint
+        {
+            template<typename Action>
+            void apply(Action&& action)
+            {
+                action(this->endPoint.value());
+            }
+
+            bool isReady() const noexcept
+            {
+                return this->endPoint.has_value();
+            }
+
+            std::optional<EndPoint> endPoint;
+        };
+
+        struct PromisedConnection
+        {
+            template<typename Action>
+            void apply(Action&& action)
+            {
+                action(this->ref);
+            }
+
+            bool isReady() const noexcept
+            {
+                return this->ref.use_count > 0;
+            }
+
+            std::weak_ptr<GameConnection> ref;
+        };
+
+        using FutureEndPoint = Utility::PendingActions<PromisedEndPoint>;
+        using FutureConnection = Utility::PendingActions<PromisedConnection>;
+        //using FutureSocketReady = Utility::PendingReadyState;
 
         void close();
 
@@ -69,7 +109,12 @@ namespace CNCOnlineForwarder::NatNeg
 
         void handlePacketFromServer(const PacketView packet);
 
-        void handlePacketToServerInternal(const PacketView packet, const EndPoint& from);
+        void handlePacketToServerInternal
+        (
+            const PacketView packet,
+            const EndPoint& from,
+            const EndPoint& server
+        );
 
         Strand strand;
         Resolver resolver;
@@ -77,13 +122,11 @@ namespace CNCOnlineForwarder::NatNeg
         Timer timeout;
 
         std::weak_ptr<NatNegProxy> proxy;
-        std::weak_ptr<GameConnection> connection;
+        FutureConnection connection;
 
         NatNegPlayerID id;
-        std::optional<EndPoint> server;
+        FutureEndPoint server;
         EndPoint clientCommunication;
-
-        std::optional<std::vector<std::pair<std::string, EndPoint>>> pendingDataToServer;
-        std::function<void()> pendingConnectionMaker;
+        //FutureSocketReady socketReadyToReceive;
     };
 }

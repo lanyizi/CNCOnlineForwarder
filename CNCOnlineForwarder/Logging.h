@@ -15,7 +15,6 @@ namespace CNCOnlineForwarder::Logging
         using SeverityLogger = boost::log::sources::severity_logger_mt<Level>;
         using LogRecord = boost::log::record;
         using LogStream = boost::log::record_ostream;
-        using LogSink = boost::log::sinks::synchronous_sink<boost::log::sinks::text_file_backend>;
         class LogProxy;
 
         Logging();

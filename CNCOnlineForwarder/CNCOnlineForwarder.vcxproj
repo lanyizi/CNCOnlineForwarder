@@ -167,6 +167,7 @@
     <ClInclude Include="Logging.h" />
     <ClInclude Include="NatNegPacket.hpp" />
     <ClInclude Include="NatNegProxy.h" />
+    <ClInclude Include="PendingActions.hpp" />
     <ClInclude Include="precompiled.h" />
     <ClInclude Include="ProxyAddressTranslator.h" />
     <ClInclude Include="SimpleHTTPClient.h" />
