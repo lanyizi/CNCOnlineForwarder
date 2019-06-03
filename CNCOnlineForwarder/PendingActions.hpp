@@ -45,7 +45,7 @@ namespace CNCOnlineForwarder::Utility
         {
             if (this->pendingActions.has_value())
             {
-                this->pendingActions.emplace_back(std::forward<Action>(action)));
+                this->pendingActions->emplace_back(std::forward<Action>(action));
                 return;
             }
 
@@ -54,6 +54,6 @@ namespace CNCOnlineForwarder::Utility
 
     private:
         FutureData data;
-        std::optional<std::vector<std::function<void(FutureData...)>>> pendingActions;
+        std::optional<std::vector<typename FutureData::ActionType>> pendingActions;
     };
 }

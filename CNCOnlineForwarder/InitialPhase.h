@@ -67,6 +67,8 @@ namespace CNCOnlineForwarder::NatNeg
     private:
         struct PromisedEndPoint
         {
+            using ActionType = std::function<void(const EndPoint&)>;
+
             template<typename Action>
             void apply(Action&& action)
             {
@@ -83,6 +85,8 @@ namespace CNCOnlineForwarder::NatNeg
 
         struct PromisedConnection
         {
+            using ActionType = std::function<void(std::weak_ptr<GameConnection>)>;
+
             template<typename Action>
             void apply(Action&& action)
             {
@@ -91,7 +95,7 @@ namespace CNCOnlineForwarder::NatNeg
 
             bool isReady() const noexcept
             {
-                return this->ref.use_count > 0;
+                return this->ref.use_count() > 0;
             }
 
             std::weak_ptr<GameConnection> ref;
