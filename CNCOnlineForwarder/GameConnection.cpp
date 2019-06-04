@@ -164,7 +164,7 @@ namespace CNCOnlineForwarder::NatNeg
             }
 
             logLine(LogLevel::info, "Packet to server handler: NatNeg step ", packet.getStep());
-            logLine(LogLevel::info, "Sending data to server through client public proxy...");
+            logLine(LogLevel::info, "Sending data to server through client public socket...");
 
             /*auto writeHandler = makeWeakWriteHandler
             (
@@ -361,11 +361,12 @@ namespace CNCOnlineForwarder::NatNeg
         if (this->remotePlayer != from)
         {
             logLine(LogLevel::warning, "Updating remote player address from ", this->remotePlayer, " to ", from);
+            this->remotePlayer = from;
         }
 
         if (PacketView{ packet }.isNatNeg())
         {
-            logLine(LogLevel::trace, "Forwarding NatNeg Packet from remote ", this->remotePlayer, " to ", this->clientRealAddress);
+            logLine(LogLevel::info, "Forwarding NatNeg Packet from remote ", this->remotePlayer, " to ", this->clientRealAddress);
         }
 
         auto writeHandler = makeWriteHandler<GameConnection>(std::move(packet));
@@ -389,7 +390,7 @@ namespace CNCOnlineForwarder::NatNeg
 
         if (PacketView{ packet }.isNatNeg())
         {
-            logLine(LogLevel::trace, "Forwarding NatNeg Packet from client ", this->remotePlayer, " to ", this->clientRealAddress);
+            logLine(LogLevel::info, "Forwarding NatNeg Packet from client ", this->remotePlayer, " to ", this->clientRealAddress);
         }
 
         auto writeHandler = makeWriteHandler<GameConnection>(std::move(packet));
