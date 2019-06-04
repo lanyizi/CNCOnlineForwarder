@@ -91,8 +91,6 @@ namespace CNCOnlineForwarder::NatNeg
             id
         );
 
-        
-
         const auto action = [self, natNegServer, natNegPort]
         {
             logLine(LogLevel::info, "InitialPhase creating, id = ", self->id);

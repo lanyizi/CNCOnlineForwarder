@@ -191,7 +191,7 @@ namespace CNCOnlineForwarder::NatNeg
             return;
         }
 
-        logLine(LogLevel::info, "Processing packet (step ", static_cast<int>(step), ") ...");
+        logLine(LogLevel::info, "Processing packet (step ", step, ") from ", from);
         if (step == NatNegStep::init)
         {
             constexpr auto sequenceNumberOffset = 12;

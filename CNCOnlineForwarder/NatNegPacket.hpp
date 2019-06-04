@@ -124,7 +124,7 @@ namespace CNCOnlineForwarder::NatNeg
                     throw std::invalid_argument{ "Invalid NatNeg packet: packet too small to contain NatNegID." };
                 }
                 auto id = NatNegID{};
-                std::copy_n(this->natNegPacket.begin(), sizeof(id), reinterpret_cast<char*>(&id));
+                std::copy_n(this->natNegPacket.begin() + natNegIDPosition, sizeof(id), reinterpret_cast<char*>(&id));
                 return id;
             }
             break;
