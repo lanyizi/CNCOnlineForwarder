@@ -102,7 +102,7 @@ namespace CNCOnlineForwarder::NatNeg
         {
             logLine(LogLevel::info, "New Connection ", self, " created, client = ", self->clientPublicAddress);
             self->extendLife();
-            self->prepareForNextPacketToPlayer();
+            self->prepareForNextPacketToClient();
 
             /*auto writeHandler = makeWeakWriteHandler
             (
@@ -156,14 +156,15 @@ namespace CNCOnlineForwarder::NatNeg
     {
         auto action = [data = packet.copyBuffer()](GameConnection& self)
         {
-            logLine(LogLevel::info, "Sending data to server through client public proxy...");
-
-            const auto packet = PacketView{ {data} };
+            const auto packet = PacketView{ data };
             if (!packet.isNatNeg())
             {
-                logLine(LogLevel::warning, "Packet from server is not NatNeg, discarded.");
+                logLine(LogLevel::warning, "Packet to server is not NatNeg, discarded.");
                 return;
             }
+
+            logLine(LogLevel::info, "Packet to server handler: NatNeg step ", packet.getStep());
+            logLine(LogLevel::info, "Sending data to server through client public proxy...");
 
             /*auto writeHandler = makeWeakWriteHandler
             (
@@ -198,7 +199,7 @@ namespace CNCOnlineForwarder::NatNeg
         {
             return self.handleCommunicationPacketFromServerInternal
             (
-                PacketView{ {data} },
+                PacketView{ data },
                 communicationAddress
             );
         };
@@ -226,11 +227,11 @@ namespace CNCOnlineForwarder::NatNeg
         this->timeout.asyncWait(std::chrono::minutes{ 1 }, std::move(waitHandler));
     }
 
-    void GameConnection::prepareForNextPacketFromPlayer()
+    void GameConnection::prepareForNextPacketFromClient()
     {
         /*const auto action = [this]
         {*/
-        const auto forwarder = []
+        const auto dispatcher = []
         (
             GameConnection& self, 
             std::string&& data, 
@@ -239,7 +240,7 @@ namespace CNCOnlineForwarder::NatNeg
         {
             return self.handlePacketToRemotePlayer(std::move(data), from);
         };
-        auto handler = ReceiveHandler<>::create(this, forwarder);
+        auto handler = ReceiveHandler<>::create(this, dispatcher);
         this->fakeRemotePlayerSocket.asyncReceiveFrom
         (
             handler->getBuffer(),
@@ -251,11 +252,11 @@ namespace CNCOnlineForwarder::NatNeg
         this->whenFakeRemoteIsReadyToReceive.asyncDo(action);*/
     }
 
-    void GameConnection::prepareForNextPacketToPlayer()
+    void GameConnection::prepareForNextPacketToClient()
     {
         /*const auto action = [this]
         {*/
-        const auto forwarder = []
+        const auto dispatcher = []
         (
             GameConnection& self, 
             std::string&& data, 
@@ -264,12 +265,12 @@ namespace CNCOnlineForwarder::NatNeg
         {
             if (from == self.server)
             {
-                return self.handlePacketFromServer(PacketView{ {data} });
+                return self.handlePacketFromServer(PacketView{ data });
             }
 
             return self.handlePacketFromRemotePlayer(std::move(data), from);
         };
-        auto handler = ReceiveHandler<>::create(this, forwarder);
+        auto handler = ReceiveHandler<>::create(this, dispatcher);
         this->publicSocketForClient.asyncReceiveFrom
         (
             handler->getBuffer(),
@@ -296,6 +297,7 @@ namespace CNCOnlineForwarder::NatNeg
             return;
         }
 
+        logLine(LogLevel::info, "Packet from server handler: NatNeg step ", packet.getStep());
         logLine(LogLevel::info, "Packet from server will be send to client from proxy.");
         proxy->sendFromProxySocket(packet, this->clientPublicAddress);
 
@@ -315,13 +317,23 @@ namespace CNCOnlineForwarder::NatNeg
             return;
         }
 
-        auto buffer = std::string{ packet.natNegPacket };
+        logLine(LogLevel::info, "CommPacket handler: NatNeg step ", packet.getStep());
+
+        auto outputBuffer = std::string{ packet.natNegPacket };
         const auto addressOffset = PacketView::getAddressOffset(packet.getStep());
         if (addressOffset.has_value())
         {
             logLine(LogLevel::info, "CommPacket contains address, will try to rewrite it");
 
+            {
+                const auto[ip, port] = parseAddress(packet.natNegPacket, addressOffset.value());
+                this->remotePlayer.address(boost::asio::ip::address_v4{ ip });
+                this->remotePlayer.port(boost::endian::big_to_native(port));
+                logLine(LogLevel::info, "CommPacket's address stored in this->remotePlayer: ", this->remotePlayer);
+            }
+
             const auto fakeRemotePlayerAddress = fakeRemotePlayerSocket->local_endpoint();
+            logLine(LogLevel::info, "FakeRemote local endpoint:", fakeRemotePlayerAddress);
             const auto addressTranslator = this->addressTranslator.lock();
             if (!addressTranslator)
             {
@@ -332,14 +344,14 @@ namespace CNCOnlineForwarder::NatNeg
                 addressTranslator->localToPublic(fakeRemotePlayerAddress);
             const auto ip = publicRemoteFakeAddress.address().to_v4().to_bytes();
             const auto port = boost::endian::native_to_big(publicRemoteFakeAddress.port());
-            rewriteAddress(buffer, addressOffset.value(), ip, port);
+            rewriteAddress(outputBuffer, addressOffset.value(), ip, port);
 
             logLine(LogLevel::info, "Address rewritten as ", publicRemoteFakeAddress);
             logLine(LogLevel::info, "Preparing to receive packet from player to fakeRemote");
-            this->prepareForNextPacketFromPlayer();
+            this->prepareForNextPacketFromClient();
         }
         logLine(LogLevel::info, "CommPacket from server will be send to client from proxy.");
-        proxy->sendFromProxySocket(PacketView{ buffer }, communicationAddress);
+        proxy->sendFromProxySocket(PacketView{ outputBuffer }, communicationAddress);
 
         this->extendLife();
     }
@@ -348,7 +360,12 @@ namespace CNCOnlineForwarder::NatNeg
     {
         if (this->remotePlayer != from)
         {
-            logLine(LogLevel::warning, "Updating remote address from ", this->remotePlayer, " to ", from);
+            logLine(LogLevel::warning, "Updating remote player address from ", this->remotePlayer, " to ", from);
+        }
+
+        if (PacketView{ packet }.isNatNeg())
+        {
+            logLine(LogLevel::trace, "Forwarding NatNeg Packet from remote ", this->remotePlayer, " to ", this->clientRealAddress);
         }
 
         auto writeHandler = makeWriteHandler<GameConnection>(std::move(packet));
@@ -358,15 +375,23 @@ namespace CNCOnlineForwarder::NatNeg
             this->clientRealAddress,
             std::move(writeHandler)
         );
-#ifdef _DEBUG
-        logLine(LogLevel::trace, "Packet from remote ", this->remotePlayer, " now forwarded to ", this->clientRealAddress);
-#endif
 
         this->extendLife();
     }
 
     void GameConnection::handlePacketToRemotePlayer(std::string&& packet, const EndPoint& from)
     {
+        if (from != this->clientRealAddress)
+        {
+            logLine(LogLevel::warning, "Updating client address from ", this->clientRealAddress, " to ", from);
+            this->clientRealAddress = from;
+        }
+
+        if (PacketView{ packet }.isNatNeg())
+        {
+            logLine(LogLevel::trace, "Forwarding NatNeg Packet from client ", this->remotePlayer, " to ", this->clientRealAddress);
+        }
+
         auto writeHandler = makeWriteHandler<GameConnection>(std::move(packet));
         this->publicSocketForClient.asyncSendTo
         (
@@ -374,16 +399,6 @@ namespace CNCOnlineForwarder::NatNeg
             this->remotePlayer,
             std::move(writeHandler)
         );
-
-#ifdef _DEBUG
-        logLine(LogLevel::trace, "Packet from client ", this->clientRealAddress, " now forwarded to ", this->remotePlayer);
-#endif
-
-        if (from != this->clientRealAddress)
-        {
-            logLine(LogLevel::warning, "Updating client address from ", this->clientRealAddress, " to ", from);
-            this->clientRealAddress = from;
-        }
 
         this->extendLife();
     }

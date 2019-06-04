@@ -66,9 +66,9 @@ namespace CNCOnlineForwarder::NatNeg
 
         void extendLife();
 
-        void prepareForNextPacketFromPlayer();
+        void prepareForNextPacketFromClient();
 
-        void prepareForNextPacketToPlayer();
+        void prepareForNextPacketToClient();
 
         void handlePacketFromServer(const PacketView packet);
 

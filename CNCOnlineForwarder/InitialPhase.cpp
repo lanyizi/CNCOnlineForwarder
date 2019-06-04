@@ -196,12 +196,14 @@ namespace CNCOnlineForwarder::NatNeg
     {
         auto action = [data = packet.copyBuffer(), from](InitialPhase& self) mutable
         {
-            if (const auto packet = PacketView{ {data} }; !packet.isNatNeg())
+            if (const auto packet = PacketView{ data }; !packet.isNatNeg())
             {
                 logLine(LogLevel::warning, "Packet from server is not NatNeg, discarded.");
                 return;
             }
 
+            // Handle packet "locally" if it's from communication address,
+            // otherwise, dispatch it to GameConnection
             auto dispatcher = [data = std::move(data), from, &self]
             (
                 const std::weak_ptr<GameConnection>& connectionRef
@@ -215,7 +217,7 @@ namespace CNCOnlineForwarder::NatNeg
                     return;
                 }
                 
-                const auto packet = PacketView{ {data} };
+                const auto packet = PacketView{ data };
 
                 if (connection->getClientPublicAddress() == from)
                 {
@@ -227,7 +229,8 @@ namespace CNCOnlineForwarder::NatNeg
                 (
                     packet,
                     from, 
-                    self.server->endPoint.value() // When connection is ready, server is certainly ready as well
+                    self.server->endPoint.value() 
+                    // When connection is ready, server is certainly ready as well
                 );
             };
             self.connection.asyncDo(std::move(dispatcher));
@@ -325,6 +328,7 @@ namespace CNCOnlineForwarder::NatNeg
     )
     {
         // TODO: Don't update address if packet is init and seqnum is not 1
+        logLine(LogLevel::info, "Packet to server handler: NatNeg step ", packet.getStep());
         logLine(LogLevel::info, "Updating clientCommunication endpoint to ", from);
         this->clientCommunication = from;
         /*auto writeHandler = makeWeakWriteHandler
