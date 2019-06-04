@@ -95,7 +95,13 @@ namespace CNCOnlineForwarder::NatNeg
 
             bool isReady() const noexcept
             {
-                return this->ref.use_count() > 0;
+                const auto defaultValue = decltype(this->ref){};
+                // from https://stackoverflow.com/a/45507610/4399840
+                const auto isNotAssignedYet = 
+                    (!this->ref.owner_before(defaultValue))
+                    &&
+                    (!defaultValue.owner_before(this->ref));
+                return !isNotAssignedYet;
             }
 
             std::weak_ptr<GameConnection> ref;

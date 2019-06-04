@@ -127,6 +127,7 @@ namespace CNCOnlineForwarder::NatNeg
             (
                 [&self = *self](const EndPoint&)
                 {
+                    logLine(LogLevel::info, "Starting to receive comm packet on local endpoint ", self.communicationSocket->local_endpoint());
                     self.prepareForNextPacketToCommunicationAddress();
                 }
             );
@@ -167,14 +168,18 @@ namespace CNCOnlineForwarder::NatNeg
             const EndPoint& server
         )
         {
-            this->connection->ref = GameConnection::create
-            (
-                objectMaker,
-                this->proxy,
-                addressTranslator,
-                server,
-                client
-            );
+            if (!this->connection->isReady())
+            {
+                this->connection->ref = GameConnection::create
+                (
+                    objectMaker,
+                    this->proxy,
+                    addressTranslator,
+                    server,
+                    client
+                );
+            }
+            this->connection.trySetReady();
         };
         const auto action = [maker](InitialPhase& self)
         {
