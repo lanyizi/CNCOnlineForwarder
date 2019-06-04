@@ -75,10 +75,15 @@ namespace CNCOnlineForwarder
                     );
                 };
 
-                auto handler = [&, receiveFrom](const auto self, const auto& error, const auto bytes)
+                const auto handler = [&, receiveFrom](const auto self, const auto& error, const auto bytes)
                 {
-                    std::cout << "Received from " << from << ": " << buffer.substr(0, bytes) << std::endl;
                     receiveFrom(self);
+                    if (error.failed())
+                    {
+                        std::cout << "Error: " << error << std::endl;
+                        return;
+                    }
+                    std::cout << "Received from " << remote << ": " << buffer.substr(0, bytes) << std::endl;
                 };
 
                 receiveFrom(handler);
