@@ -51,6 +51,41 @@ namespace CNCOnlineForwarder
                 addressTranslator
             );
 
+            
+            auto testStrand = objectMaker.makeStrand();
+            using UDP = boost::asio::ip::udp;
+            auto socket = WithStrand<UDP::socket>{ testStrand, UDP::endpoint{UDP::v4(), 0} };
+            auto buffer = std::string{};
+            auto remote = UDP::endpoint{};
+            buffer.resize(256);
+            const auto test = [&socket, &buffer, &remote]
+            {
+                std::cout << "Local Address: " << socket->local_endpoint();
+
+                const auto receiveFrom = [&](const auto handler)
+                {
+                    socket.asyncReceiveFrom
+                    (
+                        boost::asio::buffer(buffer),
+                        remote,
+                        [handler](const auto& error, const auto bytes)
+                        {
+                            return handler(handler, error, bytes);
+                        }
+                    );
+                };
+
+                auto handler = [&, receiveFrom](const auto self, const auto& error, const auto bytes)
+                {
+                    std::cout << "Received from " << from << ": " << buffer.substr(0, bytes) << std::endl;
+                    receiveFrom(self);
+                };
+
+                receiveFrom(handler);
+            };
+            boost::asio::defer(testStrand, test);
+
+
             {
                 const auto runner = [ioManager] { ioManager->run(); };
                 auto f1 = std::async(std::launch::async, runner);
