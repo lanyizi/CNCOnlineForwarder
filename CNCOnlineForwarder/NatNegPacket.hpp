@@ -23,6 +23,11 @@ namespace CNCOnlineForwarder::NatNeg
         preInitAck = 16,
     };
 
+    inline std::ostream& operator<<(std::ostream& out, const NatNegStep step)
+    {
+        return out << static_cast<int>(step);
+    }
+
     using NatNegID = std::uint32_t;
 
     struct NatNegPlayerID

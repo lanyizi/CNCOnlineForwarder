@@ -164,7 +164,7 @@ namespace CNCOnlineForwarder::NatNeg
         const auto natNegPlayerIDHolder = packet.getNatNegPlayerID();
         if (!natNegPlayerIDHolder.has_value())
         {
-            logLine(LogLevel::info, "Packet of step ", static_cast<int>(step), " does not have NatNegPlayerID, discarded.");
+            logLine(LogLevel::info, "Packet of step ", step, " does not have NatNegPlayerID, discarded.");
             return;
         }
         const auto natNegPlayerID = natNegPlayerIDHolder.value();
