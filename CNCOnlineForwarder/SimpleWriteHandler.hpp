@@ -39,7 +39,7 @@ namespace CNCOnlineForwarder::Utility
 
             if (bytesSent != this->data->size())
             {
-                logLine<Type>(Level::error, "Proxy: only part of packet was sent: ", bytesSent, "/", this->data->size());
+                logLine<Type>(Level::error, "Only part of packet was sent: ", bytesSent, "/", this->data->size());
                 return;
             }
         }

@@ -3,7 +3,6 @@
 #include "GameConnection.h"
 #include "Logging.h"
 #include "NatNegProxy.h"
-//#include "SocketAutoBinder.hpp"
 #include "SimpleWriteHandler.hpp"
 #include "WeakRefHandler.hpp"
 
@@ -15,7 +14,6 @@ using LogLevel = CNCOnlineForwarder::Logging::Level;
 
 using CNCOnlineForwarder::Utility::makeWeakHandler;
 using CNCOnlineForwarder::Utility::makeWriteHandler;
-//using CNCOnlineForwarder::Utility::SocketAutoBinder::makeWeakWriteHandler;
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -196,7 +194,7 @@ namespace CNCOnlineForwarder::NatNeg
         {
             if (const auto packet = PacketView{ data }; !packet.isNatNeg())
             {
-                logLine(LogLevel::warning, "Packet from server is not NatNeg, discarded.");
+                logLine(LogLevel::warning, "Packet to server dispatcher: Not NatNeg, discarded.");
                 return;
             }
 
@@ -210,7 +208,7 @@ namespace CNCOnlineForwarder::NatNeg
                 const auto connection = connectionRef.lock();
                 if (!connection)
                 {
-                    logLine(LogLevel::warning, "Packet to server handler: aborting because connection expired");
+                    logLine(LogLevel::warning, "Packet to server dispatcher: aborting because connection expired");
                     self.close();
                     return;
                 }
@@ -219,10 +217,12 @@ namespace CNCOnlineForwarder::NatNeg
 
                 if (connection->getClientPublicAddress() == from)
                 {
+                    logLine(LogLevel::info, "Packet to server dispatcher: source ", from, " is client public address, dispatching to GameConnection");
                     connection->handlePacketToServer(packet);
                     return;
                 }
 
+                logLine(LogLevel::info, "Packet to server dispatcher: dispatching to self (InitialPhase)");
                 self.handlePacketToServerInternal
                 (
                     packet,

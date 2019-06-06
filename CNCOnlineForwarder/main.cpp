@@ -31,16 +31,16 @@ namespace CNCOnlineForwarder
     {
         using namespace Logging;
         using namespace Utility;
+
+        log(Level::info) << "Begin!";
         try
         {
-            log(Level::info) << "Begin!";
-
             const auto ioManager = IOManager::create();
             auto objectMaker = IOManager::ObjectMaker{ ioManager };
 
             auto signals = objectMaker.make<boost::asio::signal_set>(SIGINT, SIGTERM);
-            signals.async_wait(makeWeakHandler(ioManager.get(), signalHandler));
-            
+            signals.async_wait(makeWeakHandler(ioManager.get(), &signalHandler));
+
             const auto addressTranslator = ProxyAddressTranslator::create(objectMaker);
 
             const auto natNegProxy = NatNeg::NatNegProxy::create
@@ -59,13 +59,12 @@ namespace CNCOnlineForwarder
                 f1.get();
                 f2.get();
             }
-
-            log(Level::info) << "End";
         }
         catch (const std::exception& error)
         {
             log(Level::fatal) << "Unhandled exception: " << error.what();
         }
+        log(Level::info) << "End";
     }
 }
 

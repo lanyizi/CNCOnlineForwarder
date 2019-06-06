@@ -11,7 +11,6 @@
 #include "NatNegPacket.hpp"
 #include "ProxyAddressTranslator.h"
 #include "PendingActions.hpp"
-//#include "PromisedReady.hpp"
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -109,7 +108,6 @@ namespace CNCOnlineForwarder::NatNeg
 
         using FutureEndPoint = Utility::PendingActions<PromisedEndPoint>;
         using FutureConnection = Utility::PendingActions<PromisedConnection>;
-        //using FutureSocketReady = Utility::PendingReadyState;
 
         void close();
 
@@ -137,6 +135,5 @@ namespace CNCOnlineForwarder::NatNeg
         NatNegPlayerID id;
         FutureEndPoint server;
         EndPoint clientCommunication;
-        //FutureSocketReady socketReadyToReceive;
     };
 }

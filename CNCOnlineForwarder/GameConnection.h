@@ -8,7 +8,6 @@
 #include "IOManager.hpp"
 #include "NatNegPacket.hpp"
 #include "ProxyAddressTranslator.h"
-//#include "SocketAutoBinder.hpp"
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -19,9 +18,6 @@ namespace CNCOnlineForwarder::NatNeg
     {
     private:
         struct PrivateConstructor {};
-
-        template<typename Handler>
-        class ReceiveHandler;
     public:
         using Strand = IOManager::StrandType;
         using EndPoint = boost::asio::ip::udp::endpoint;
@@ -29,6 +25,7 @@ namespace CNCOnlineForwarder::NatNeg
         using Timer = WithStrand<boost::asio::steady_timer>;
         using NatNegPlayerID = NatNegPlayerID;
         using PacketView = NatNegPacketView;
+        using Buffer = std::unique_ptr<char[]>;
 
         static constexpr auto description = "GameConnection";
 
@@ -62,7 +59,6 @@ namespace CNCOnlineForwarder::NatNeg
         );
 
     private:
-        /*using FutureSocketReady = Utility::PendingReadyState;*/
 
         void extendLife();
 
@@ -70,7 +66,7 @@ namespace CNCOnlineForwarder::NatNeg
 
         void prepareForNextPacketToClient();
 
-        void handlePacketFromServer(const PacketView packet);
+        void handlePacketFromServer(Buffer buffer, const std::size_t size);
 
         void handleCommunicationPacketFromServerInternal
         (
@@ -78,9 +74,19 @@ namespace CNCOnlineForwarder::NatNeg
             const EndPoint& communicationAddress
         );
 
-        void handlePacketFromRemotePlayer(std::string&& packet, const EndPoint& from);
+        void handlePacketFromRemotePlayer
+        (
+            Buffer buffer, 
+            const std::size_t size, 
+            const EndPoint& from
+        );
 
-        void handlePacketToRemotePlayer(std::string&& packet, const EndPoint& from);
+        void handlePacketToRemotePlayer
+        (
+            Buffer buffer, 
+            const std::size_t size, 
+            const EndPoint& from
+        );
 
         Strand strand;
         std::weak_ptr<NatNegProxy> proxy;
@@ -92,8 +98,6 @@ namespace CNCOnlineForwarder::NatNeg
         Socket publicSocketForClient;
         Socket fakeRemotePlayerSocket;
         Timer timeout;
-        /*FutureSocketReady whenPublicSocketForClientIsReadyToReceive;
-        FutureSocketReady whenFakeRemoteIsReadyToReceive;*/
     };
 }
 
