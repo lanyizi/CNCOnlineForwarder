@@ -9,7 +9,7 @@ using UDP = boost::asio::ip::udp;
 using ErrorCode = boost::system::error_code;
 using LogLevel = CNCOnlineForwarder::Logging::Level;
 
-using CNCOnlineForwarder::Utility::makeWeakHandler;
+using CNCOnlineForwarder::Utility::makeDebugWeakHandler;
 
 namespace CNCOnlineForwarder::NatNeg
 {
@@ -82,6 +82,7 @@ namespace CNCOnlineForwarder::NatNeg
     template<typename NextAction, typename Handler>
     auto makeReceiveHandler
     (
+        std::string what,
         GameConnection* pointer, 
         NextAction&& nextAction, 
         Handler&& hanlder
@@ -90,8 +91,9 @@ namespace CNCOnlineForwarder::NatNeg
         using NextActionValue = std::remove_reference_t<NextAction>;
         using HandlerValue = std::remove_reference_t<Handler>;
 
-        return makeWeakHandler
+        return makeDebugWeakHandler
         (
+            std::move(what),
             pointer, 
             ReceiveHandler<NextActionValue, HandlerValue>
             {
@@ -222,7 +224,7 @@ namespace CNCOnlineForwarder::NatNeg
             self.extendLife();
         };
 
-        boost::asio::defer(this->strand, makeWeakHandler(this, std::move(action)));
+        boost::asio::defer(this->strand, makeDebugWeakHandler("handlePacketToServer", this, std::move(action)));
     }
 
     void GameConnection::handleCommunicationPacketFromServer
@@ -240,7 +242,7 @@ namespace CNCOnlineForwarder::NatNeg
             );
         };
 
-        boost::asio::defer(this->strand, makeWeakHandler(this, std::move(action)));
+        boost::asio::defer(this->strand, makeDebugWeakHandler("handleCommunicationPacketFromServer", this, std::move(action)));
     }
 
     void GameConnection::extendLife()
@@ -281,7 +283,7 @@ namespace CNCOnlineForwarder::NatNeg
             return self.handlePacketToRemotePlayer(std::move(data), size, from);
         };
 
-        auto handler = makeReceiveHandler(this, then, dispatcher);
+        auto handler = makeReceiveHandler("prepareForNextPacketFromClient", this, then, dispatcher);
         this->fakeRemotePlayerSocket.asyncReceiveFrom
         (
             handler->getBuffer(),
@@ -314,7 +316,7 @@ namespace CNCOnlineForwarder::NatNeg
 
             return self.handlePacketFromRemotePlayer(std::move(data), size, from);
         };
-        auto handler = makeReceiveHandler(this, then, dispatcher);
+        auto handler = makeReceiveHandler("prepareForNextPacketToClient", this, then, dispatcher);
         this->publicSocketForClient.asyncReceiveFrom
         (
             handler->getBuffer(),
