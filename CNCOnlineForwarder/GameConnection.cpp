@@ -305,8 +305,6 @@ namespace CNCOnlineForwarder::NatNeg
             const EndPoint& from
         )
         {
-            self.prepareForNextPacketToClient();
-
             if (from == self.server)
             {
                 return self.handlePacketFromServer(std::move(data), size);
