@@ -15,8 +15,13 @@ Planned features:
 - [ ] Peerchat Proxy: avoid TCP 6667 port's issues
 - [ ] Local HTTP server: avoid the problem of _"Failed to connect to servers. Please check to make sure you have an active connection to the Internet"_ during log in of C&C:Online caused by high latency between http.server.cnc-online.net and player's computer.
 
-# How to run this server
-You can download built binaries from (AppVeyor)[https://ci.appveyor.com/project/BSG-75/CNCOnlineForwarder]. To run the server, make sure to allow this program in your Firewall Settings, since it will need to receive inbound UDP packets before sending them out. 
+## How to run this server
+You can download built binaries from [AppVeyor](https://ci.appveyor.com/project/BSG-75/CNCOnlineForwarder/build/artifacts). To run the server, make sure to allow this program in your Firewall Settings, since it will need to receive inbound UDP packets before sending them out. 
 
 Currently only Windows Version is available (I'm developing it with Visual Studio). 
 _But_ since the server part only uses C++ Standard Library and Boost, you should be able to port it to other platforms as well. If you can bring here some CMake build files, that would be really nice!
+
+Before I could write the client part of this project, you'll have to edit your `hosts` file in order to let the game use your proxy server.
+It should look like this:
+
+`[Your proxy server's IP address] natneg.server.cnc-online.net`
